@@ -23,7 +23,7 @@ python scripts/init_db.py        # создаёт таблицу klines
 
 echo "⬇️ 5. Качаю историю свечей"
 python scripts/ingest_binance.py --days 365 \
-      --api_key "$BINANCE_KEY" --api_secret "$BINANCE_SECRET"
+      --api_key "$BINANCE_KEY" --api_secret "$BINANCE_SECRET" --silent
 
 echo "🔎 6. Кандидаты → copula → NSGA"
 python scripts/find_candidates.py

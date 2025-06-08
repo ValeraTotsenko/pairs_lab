@@ -1,22 +1,27 @@
+#!/usr/bin/env python
 import duckdb, pandas as pd
-con = duckdb.connect('data/quotes.duckdb')
+from tqdm import tqdm
 
-def get_prices(symbol):
-    return con.sql(f"""
-      select ts, close from klines
-      where symbol='{symbol}' and interval='1d'
-      order by ts
-    """).df().set_index('ts')['close']
+CORR_TH = 0.6            # порог корреляции
+MIN_OVERLAP = 90         # мин. общих дней
 
-symbols = [r[0] for r in con.sql("select distinct symbol from klines").fetchall()]
-corrs=[]
-for i,s1 in enumerate(symbols):
-    p1 = get_prices(s1)
+db = duckdb.connect("data/quotes.duckdb")
+symbols = [r[0] for r in db.sql("SELECT DISTINCT symbol FROM klines").fetchall()]
+
+def price_series(sym):
+    return db.sql(f"SELECT ts, close FROM klines "
+                  f"WHERE symbol='{sym}' AND interval='1d' ORDER BY ts").df()
+
+pairs = []
+for i, s1 in enumerate(tqdm(symbols, desc="corr scan")):
+    p1 = price_series(s1).set_index('ts')['close']
     for s2 in symbols[i+1:]:
-        p2 = get_prices(s2)
-        df = pd.concat([p1,p2],axis=1).dropna()
-        if len(df)>90:
-            cor = df.corr().iloc[0,1]
-            if cor>0.6:
-                corrs.append((s1,s2,cor,len(df)))
-pd.DataFrame(corrs,columns=['sym1','sym2','corr','n']).to_csv('candidates.csv',index=False)
+        p2 = price_series(s2).set_index('ts')['close']
+        df = pd.concat([p1, p2], axis=1).dropna()
+        if len(df) >= MIN_OVERLAP:
+            c = df.corr().iloc[0, 1]
+            if c > CORR_TH:
+                pairs.append((s1, s2, c, len(df)))
+pd.DataFrame(pairs, columns=['sym1', 'sym2', 'corr', 'n']) \
+  .to_csv('candidates.csv', index=False)
+print(f"✅ Найдено пар: {len(pairs)}")
