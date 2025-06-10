@@ -17,16 +17,6 @@ def price_series(sym):
     df = df.drop_duplicates(subset='ts', keep='last')
     return df.set_index('ts')['close']
 
-for i, s1 in enumerate(tqdm(symbols, desc="corr scan")):
-    p1 = price_series(s1)
-    for s2 in symbols[i+1:]:
-        p2 = price_series(s2)
-        df = pd.concat([p1, p2], axis=1).dropna()
-        if len(df) >= MIN_OVERLAP:
-            c = df.corr().iloc[0, 1]
-            if c > CORR_TH:
-                pairs.append((s1, s2, c, len(df)))
-
 pairs = []
 for i, s1 in enumerate(tqdm(symbols, desc="corr scan")):
     p1 = price_series(s1).set_index('ts')['close']
