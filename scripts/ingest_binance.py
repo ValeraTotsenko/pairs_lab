@@ -23,6 +23,7 @@ interval = "1d"
 
 # ---------------- DB -----------------
 db = duckdb.connect("data/quotes.duckdb")
+db.execute("PRAGMA create_unique_index('klines_idx', klines(ts, symbol, interval));")
 insert_sql = """INSERT INTO klines VALUES
     (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
@@ -48,6 +49,7 @@ for sym in tqdm(symbols, disable=args.silent):
         if len(ohlc) < 1000 or cursor_since > exc.milliseconds():
             break
     if rows:
+        rows = list({(r[3], r[1], r[2]): r for r in rows}.values())  # dedup by (ts,sym,intv)
         db.executemany(insert_sql, rows)
 db.close()
 log("✅ История свечей загружена.")

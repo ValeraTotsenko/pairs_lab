@@ -9,8 +9,13 @@ db = duckdb.connect("data/quotes.duckdb")
 symbols = [r[0] for r in db.sql("SELECT DISTINCT symbol FROM klines").fetchall()]
 
 def price_series(sym):
-    return db.sql(f"SELECT ts, close FROM klines "
-                  f"WHERE symbol='{sym}' AND interval='1d' ORDER BY ts").df()
+    df = db.sql(f"""
+        SELECT ts, close FROM klines
+        WHERE symbol='{sym}' AND interval='1d'
+        ORDER BY ts
+    """).df()
+    df = df.drop_duplicates(subset='ts', keep='last')     # <- NEW
+    return df.set_index('ts')['close']
 
 pairs = []
 for i, s1 in enumerate(tqdm(symbols, desc="corr scan")):

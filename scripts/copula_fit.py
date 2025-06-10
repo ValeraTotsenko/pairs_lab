@@ -9,8 +9,13 @@ cand = pd.read_csv('candidates.csv')
 good = []
 
 def price(sym):
-    return db.sql(f"SELECT ts, close FROM klines "
-                  f"WHERE symbol='{sym}' AND interval='1d' ORDER BY ts").df()
+    df = db.sql(f"""
+        SELECT ts, close FROM klines
+        WHERE symbol='{sym}' AND interval='1d'
+        ORDER BY ts
+    """).df()
+    df = df.drop_duplicates(subset='ts', keep='last')     # <- NEW
+    return df
 
 for _, row in cand.iterrows():
     p1 = price(row.sym1); p2 = price(row.sym2)
