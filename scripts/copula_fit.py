@@ -2,7 +2,7 @@
 import duckdb, pandas as pd, numpy as np
 import statsmodels.tsa.stattools as ts
 from scipy import stats
-from copulas.multivariate import StudentMultivariate
+from copulas.multivariate import MultivariateStudentT
 
 db   = duckdb.connect("data/quotes.duckdb")
 cand = pd.read_csv('candidates.csv')
@@ -27,7 +27,7 @@ for _, row in cand.iterrows():
     u  = stats.rankdata(r1) / (len(r1) + 1)
     v  = stats.rankdata(r2) / (len(r2) + 1)
     try:
-        cop = StudentMultivariate()
+        cop = MultivariateStudentT()
         cop.fit(np.column_stack([u, v]))
         rho = cop.covariance[0, 1]
         adf_p = ts.adfuller(np.log(df.close1 / df.close2))[1]
