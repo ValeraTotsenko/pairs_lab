@@ -9,5 +9,5 @@ vectorbt
 pymoo==0.6.0.1
 sqlmodel==0.0.16
 aiogram==2.25.2
-copulas==0.7.0
+copulas
 tqdm==4.66.4

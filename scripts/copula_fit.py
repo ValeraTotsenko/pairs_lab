@@ -14,23 +14,24 @@ def price(sym):
         WHERE symbol='{sym}' AND interval='1d'
         ORDER BY ts
     """).df()
-    df = df.drop_duplicates(subset='ts', keep='last')     # <- NEW
-    return df
+    df = df.drop_duplicates(subset='ts', keep='last')
+    return pd.Series(df['close'].values, index=df['ts'])
 
 for _, row in cand.iterrows():
-    p1 = price(row.sym1); p2 = price(row.sym2)
-    df = p1.merge(p2, on='ts', suffixes=('1', '2')).dropna()
-    if len(df) < 120:    # минимум 4 мес.
+    p1 = price(row.sym1)
+    p2 = price(row.sym2)
+    df = pd.concat([p1, p2], axis=1, keys=['close1', 'close2']).dropna()
+    if len(df) < 120:
         continue
-    r1 = df.close1.pct_change().dropna()
-    r2 = df.close2.pct_change().dropna()
+    r1 = df['close1'].pct_change().dropna()
+    r2 = df['close2'].pct_change().dropna()
     u  = stats.rankdata(r1) / (len(r1) + 1)
     v  = stats.rankdata(r2) / (len(r2) + 1)
     try:
         cop = MultivariateStudentT()
         cop.fit(np.column_stack([u, v]))
-        rho = cop.covariance[0, 1]
-        adf_p = ts.adfuller(np.log(df.close1 / df.close2))[1]
+        rho = cop.covariance[0, 1] if hasattr(cop, "covariance") else cop.sigma[0, 1]
+        adf_p = ts.adfuller(np.log(df['close1'] / df['close2']))[1]
         if abs(rho) > 0.6 and adf_p < 0.05:
             good.append((row.sym1, row.sym2, rho, adf_p))
     except Exception as e:
