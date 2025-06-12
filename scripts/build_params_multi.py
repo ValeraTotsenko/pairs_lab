@@ -82,4 +82,4 @@ if __name__ == "__main__":
     # Сохраняем всё сразу
     with open("params_multi.json", "w") as f:
         json.dump(params_list, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Сохранено {len(params_list)} оптимальных конфигов в params_multi.jso
+    print(f"\n✅ Сохранено {len(params_list)} оптимальных конфигов в params_multi.json")
