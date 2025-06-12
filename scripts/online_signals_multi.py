@@ -43,7 +43,7 @@ async def main():
                 pA, pB = get_last_prices(pair, pair['window'])
                 spread = np.log(pA[-1]) - np.log(pB[-1])
                 hist_spread = np.log(pA) - np.log(pB)
-                z = (spread - hist_spread.mean()) / hist_spread.std()
+                z = float((spread - hist_spread.mean()) / hist_spread.std())
                 now = datetime.now().strftime('%Y-%m-%d %H:%M')
 
                 if z > pair['zin']:
