@@ -31,7 +31,7 @@ def optimize_params(sym_a, sym_b):
             self.xl = np.array([20, 1.0, 0.5, 1.0])
             self.xu = np.array([60, 3.0, 1.5, 3.0])  # окно, zin, zout, плечо
 
-        def evaluate(self, X):
+        def evaluate(self, X, *args, **kwargs):
             Fs = []
             for w, zin, zout, lev in X:
                 spread = np.log(self.close.a) - np.log(self.close.b)
