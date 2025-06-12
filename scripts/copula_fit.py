@@ -1,50 +1,38 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import duckdb, pandas as pd, numpy as np
 import statsmodels.tsa.stattools as ts
-from scipy import stats
-from copulas.multivariate import GaussianMultivariate
 from tqdm import tqdm
 
-db   = duckdb.connect("data/quotes.duckdb")
 cand = pd.read_csv('candidates.csv')
 good = []
+db   = duckdb.connect("data/quotes.duckdb")
 
 def price(sym):
     df = db.sql(f"""
-        SELECT ts, close, volume FROM klines
+        SELECT ts, close FROM klines
         WHERE symbol='{sym}' AND interval='1d'
         ORDER BY ts
     """).df()
     df = df.drop_duplicates(subset='ts', keep='last')
-    # фильтр по длине истории и объёму
-    if len(df) < 120: 
-        return None
-    avg_vol = df['volume'][-90:].mean()
-    if avg_vol < 20_000: 
-        return None
     return pd.Series(df['close'].values, index=df['ts'])
 
 for _, row in tqdm(cand.iterrows(), total=len(cand)):
     p1 = price(row.sym1)
     p2 = price(row.sym2)
-    if p1 is None or p2 is None:
-        continue
     df = pd.concat([p1, p2], axis=1, keys=['close1', 'close2']).dropna()
     if len(df) < 120:
         continue
+    # Используем доходности
     r1 = df['close1'].pct_change().dropna()
     r2 = df['close2'].pct_change().dropna()
-    u  = stats.rankdata(r1) / (len(r1) + 1)
-    v  = stats.rankdata(r2) / (len(r2) + 1)
+    # Корреляция Спирмена
+    rho = r1.corr(r2, method='spearman')
     try:
-        cop = GaussianMultivariate()
-        cop.fit(np.column_stack([u, v]))
-        rho = cop.covariance[0, 1]
         adf_p = ts.adfuller(np.log(df['close1'] / df['close2']))[1]
         if abs(rho) > 0.6 and adf_p < 0.05:
             good.append((row.sym1, row.sym2, rho, adf_p))
     except Exception as e:
-        print(f"skip {row.sym1}/{row.sym2} — copula fail: {e}")
+        print(f"skip {row.sym1}/{row.sym2} — ADF fail: {e}")
 
 pd.DataFrame(good, columns=['s1', 's2', 'rho', 'adf_p']) \
   .to_csv('pairs_ready.csv', index=False)
