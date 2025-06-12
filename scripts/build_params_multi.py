@@ -46,7 +46,7 @@ def optimize_params(sym_a, sym_b):
                 ret = -equity.iloc[-1]
                 dd = equity.min() / equity.max()
                 Fs.append([ret, dd])
-            return np.array(Fs)
+            return {'F': np.array(Fs)}
 
     problem = PairProblem(df)
 
