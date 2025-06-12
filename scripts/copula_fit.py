@@ -3,6 +3,7 @@ import duckdb, pandas as pd, numpy as np
 import statsmodels.tsa.stattools as ts
 from scipy import stats
 from copulas.multivariate import GaussianMultivariate
+from tqdm import tqdm
 
 db   = duckdb.connect("data/quotes.duckdb")
 cand = pd.read_csv('candidates.csv')
@@ -10,16 +11,24 @@ good = []
 
 def price(sym):
     df = db.sql(f"""
-        SELECT ts, close FROM klines
+        SELECT ts, close, volume FROM klines
         WHERE symbol='{sym}' AND interval='1d'
         ORDER BY ts
     """).df()
     df = df.drop_duplicates(subset='ts', keep='last')
+    # фильтр по длине истории и объёму
+    if len(df) < 120: 
+        return None
+    avg_vol = df['volume'][-90:].mean()
+    if avg_vol < 20_000: 
+        return None
     return pd.Series(df['close'].values, index=df['ts'])
 
-for _, row in cand.iterrows():
+for _, row in tqdm(cand.iterrows(), total=len(cand)):
     p1 = price(row.sym1)
     p2 = price(row.sym2)
+    if p1 is None or p2 is None:
+        continue
     df = pd.concat([p1, p2], axis=1, keys=['close1', 'close2']).dropna()
     if len(df) < 120:
         continue
@@ -30,10 +39,7 @@ for _, row in cand.iterrows():
     try:
         cop = GaussianMultivariate()
         cop.fit(np.column_stack([u, v]))
-        if hasattr(cop, "covariance"):
-            rho = cop.covariance[0, 1]
-        else:
-            rho = cop.sigma[0, 1]
+        rho = cop.covariance[0, 1]
         adf_p = ts.adfuller(np.log(df['close1'] / df['close2']))[1]
         if abs(rho) > 0.6 and adf_p < 0.05:
             good.append((row.sym1, row.sym2, rho, adf_p))
