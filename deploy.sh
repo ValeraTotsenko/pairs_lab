@@ -20,6 +20,7 @@ pip install duckdb pandas numpy tqdm aiogram pymoo vectorbt ccxt
 
 echo "🗄 4. Инициализирую DuckDB"
 python scripts/init_db.py
+python scripts/init_trades_db.py
 
 echo "⬇️ 5. Качаю историю свечей"
 python scripts/ingest_binance.py --days 365 \
