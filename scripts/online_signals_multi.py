@@ -1,8 +1,6 @@
 import os, json, asyncio, sqlite3, shelve
 import ccxt.async_support as ccxt
 import numpy as np
-import pandas as pd
-import duckdb
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -47,21 +45,21 @@ def init_trades_db():
     conn.close()
 init_trades_db()
 
-def get_last_prices(pair, window):
-    db = duckdb.connect("data/quotes.duckdb")
-    df_a = db.sql(f"SELECT ts, close FROM klines WHERE symbol='{pair['pair_a']}' AND interval='1d' ORDER BY ts DESC LIMIT {window+5}").df()
-    df_b = db.sql(f"SELECT ts, close FROM klines WHERE symbol='{pair['pair_b']}' AND interval='1d' ORDER BY ts DESC LIMIT {window+5}").df()
-    db.close()
-    df_a = df_a.drop_duplicates(subset='ts', keep='last').set_index('ts')
-    df_b = df_b.drop_duplicates(subset='ts', keep='last').set_index('ts')
-    df = pd.concat([df_a, df_b], axis=1, keys=['a', 'b']).dropna().iloc[-window:]
-    return df['a'].values, df['b'].values
+async def get_last_prices(pair, window, timeframe='1h'):
+    """Загружает последние цены через API Binance."""
+    ohlc_a, ohlc_b = await asyncio.gather(
+        exc.fetch_ohlcv(pair['pair_a'], timeframe=timeframe, limit=window),
+        exc.fetch_ohlcv(pair['pair_b'], timeframe=timeframe, limit=window)
+    )
+    pA = np.array([c[4] for c in ohlc_a], dtype=float)
+    pB = np.array([c[4] for c in ohlc_b], dtype=float)
+    return pA, pB
 
 async def monitor_pairs():
     while True:
         for pair in PAIRS:
             try:
-                pA, pB = get_last_prices(pair, pair['window'])
+                pA, pB = await get_last_prices(pair, pair['window'])
                 spread = np.log(pA[-1]) - np.log(pB[-1])
                 hist_spread = np.log(pA) - np.log(pB)
                 raw_z = (spread - hist_spread.mean()) / hist_spread.std()
@@ -96,12 +94,13 @@ async def monitor_pairs():
 @dp.callback_query_handler(lambda c: c.data.startswith('open|'))
 async def open_trade_callback(callback_query: types.CallbackQuery):
     _, pair_a, pair_b, z_entry, window = callback_query.data.split('|')
-    # Получить текущие цены
-    pA, pB = get_last_prices(
-        {'pair_a': pair_a, 'pair_b': pair_b, 'window': int(window)}, int(window)
+    # Получить актуальные цены через API
+    ticker_a, ticker_b = await asyncio.gather(
+        exc.fetch_ticker(pair_a),
+        exc.fetch_ticker(pair_b)
     )
-    px_a = float(pA[-1])
-    px_b = float(pB[-1])
+    px_a = float(ticker_a['last'])
+    px_b = float(ticker_b['last'])
     # Рассчитать TP/SL (±2% для примера)
     tp_a, sl_a = px_a * 1.02, px_a * 0.98
     tp_b, sl_b = px_b * 0.98, px_b * 1.02
@@ -143,6 +142,21 @@ async def show_open_trades(message: types.Message):
         for row in rows
     ])
     await message.answer("Открытые сделки:\n\n" + text)
+
+# Команда для удаления сделки по ID
+@dp.message_handler(commands=["del_trade"])
+async def delete_trade(message: types.Message):
+    args = message.get_args()
+    if not args.isdigit():
+        await message.answer("Используйте: /del_trade <id>")
+        return
+    trade_id = int(args)
+    conn = sqlite3.connect('trades.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
+    conn.commit()
+    conn.close()
+    await message.answer(f"Сделка #{trade_id} удалена")
 
 # Запуск мониторинга
 async def on_startup(dp):
